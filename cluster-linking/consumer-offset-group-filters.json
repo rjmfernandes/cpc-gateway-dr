@@ -1,0 +1,12 @@
+{
+  "groupFilters": [
+    {
+      "name": "dr-demo-consumer",
+      "patternType": "LITERAL",
+      "filterType": "INCLUDE",
+      "topicTypes": [
+        "LOCAL_MIRROR"
+      ]
+    }
+  ]
+}
