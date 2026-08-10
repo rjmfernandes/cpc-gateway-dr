@@ -1,5 +1,9 @@
 # Kafka DR Switchover with Cluster Linking and CPC Gateway
 
+Sources:
+- https://github.com/tomasalmeida/cluster-schema-linking-examples/tree/main/disaster-recovery
+- https://github.com/confluentinc/gateway-images/tree/master/examples/client-switchover 
+
 This demo shows a local disaster recovery flow for Kafka clients that connect through CPC Gateway.
 
 Two single-node Kafka clusters are started with Docker Compose. Clients connect only to the Gateway route on `localhost:19092`, which initially forwards traffic to `kafka-1`. Cluster Linking mirrors `test-topic` from `kafka-1` to `kafka-2`. After simulating a `kafka-1` failure, the mirror topic is failed over on `kafka-2`, the Gateway route is switched to `kafka2-domain`, and the same client commands can be restarted without changing their bootstrap address.
