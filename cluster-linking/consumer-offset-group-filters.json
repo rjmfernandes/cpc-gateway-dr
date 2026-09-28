@@ -5,7 +5,8 @@
       "patternType": "LITERAL",
       "filterType": "INCLUDE",
       "topicTypes": [
-        "LOCAL_MIRROR"
+        "LOCAL_MIRROR",
+        "REMOTE_MIRROR"
       ]
     }
   ]

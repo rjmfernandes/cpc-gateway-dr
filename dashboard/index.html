@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>CPC Gateway DR Demo</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+    <h1>CPC Gateway Disaster Recovery</h1>
+    <p>Kafka Cluster Linking + CPC Gateway</p>
+</header>
+
+<main>
+
+    <!-- Client endpoint -->
+
+    <section class="client">
+
+        <div class="section-label">
+            CLIENT BOOTSTRAP ADDRESS
+        </div>
+
+        <div class="endpoint">
+            localhost:19092
+        </div>
+
+        <div class="constant">
+            NEVER CHANGES
+        </div>
+
+    </section>
+
+
+    <!-- Gateway -->
+
+    <section class="architecture">
+
+        <div id="gateway" class="box gateway">
+
+            <h2>CPC Gateway</h2>
+
+            <div
+                id="gateway-status"
+                class="status unknown"
+            >
+                <span class="status-dot"></span>
+                CHECKING...
+            </div>
+
+            <div class="route">
+
+                Active route:
+
+                <strong id="gateway-route">
+                    ...
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <!-- Gateway to clusters -->
+
+        <div class="gateway-connection">
+
+            <div class="vertical-line"></div>
+
+            <div class="horizontal-line"></div>
+
+            <div
+                id="route-left"
+                class="route-branch left"
+            ></div>
+
+            <div
+                id="route-right"
+                class="route-branch right"
+            ></div>
+
+        </div>
+
+
+        <!-- Kafka clusters -->
+
+        <div class="clusters">
+
+            <!-- Kafka 1 -->
+
+            <div
+                id="kafka1"
+                class="box cluster"
+            >
+
+                <h2>Kafka 1</h2>
+
+                <div class="role">
+                    PRIMARY
+                </div>
+
+                <div
+                    id="kafka1-status"
+                    class="status unknown"
+                >
+                    <span class="status-dot"></span>
+                    CHECKING...
+                </div>
+
+            </div>
+
+
+            <!-- Cluster Linking -->
+
+            <div class="link">
+
+                <div class="link-line">
+
+                    <div class="replication-line"></div>
+
+                    <div class="arrow-head"></div>
+
+                </div>
+
+                <div class="link-title">
+                    Cluster Linking
+                </div>
+
+                <div
+                    id="mirror-state"
+                    class="mirror-state"
+                >
+                    State: ...
+                </div>
+
+            </div>
+
+
+            <!-- Kafka 2 -->
+
+            <div
+                id="kafka2"
+                class="box cluster"
+            >
+
+                <h2>Kafka 2</h2>
+
+                <div class="role">
+                    DR
+                </div>
+
+                <div
+                    id="kafka2-status"
+                    class="status unknown"
+                >
+                    <span class="status-dot"></span>
+                    CHECKING...
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- DR message -->
+
+    <section class="dr-summary">
+
+        <div class="summary-item">
+
+            <span class="summary-label">
+                Client endpoint
+            </span>
+
+            <span class="summary-value">
+                localhost:19092
+            </span>
+
+        </div>
+
+        <div class="summary-item">
+
+            <span class="summary-label">
+                Client configuration changes
+            </span>
+
+            <span
+                id="client-change"
+                class="summary-value success-text"
+            >
+                NONE
+            </span>
+
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+    Status refreshes automatically every second
+</footer>
+
+
+<script src="app.js"></script>
+
+</body>
+
+</html>

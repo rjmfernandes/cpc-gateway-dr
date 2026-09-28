@@ -1,0 +1,597 @@
+/* ---------------------------------------------------------
+   Base
+   --------------------------------------------------------- */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+
+    min-height: 100vh;
+
+    background:
+        radial-gradient(
+            circle at top,
+            #161d27 0%,
+            #0d1117 45%,
+            #090c10 100%
+        );
+
+    color: #e6edf3;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+}
+
+
+/* ---------------------------------------------------------
+   Header
+   --------------------------------------------------------- */
+
+header {
+    text-align: center;
+
+    padding:
+        28px
+        20px
+        10px;
+}
+
+header h1 {
+    margin: 0;
+
+    font-size: 34px;
+    font-weight: 700;
+}
+
+header p {
+    margin-top: 7px;
+
+    color: #8b949e;
+
+    font-size: 16px;
+}
+
+
+/* ---------------------------------------------------------
+   Main
+   --------------------------------------------------------- */
+
+main {
+    width: min(
+        1050px,
+        calc(100% - 40px)
+    );
+
+    margin: 0 auto;
+}
+
+
+/* ---------------------------------------------------------
+   Client endpoint
+   --------------------------------------------------------- */
+
+.client {
+    text-align: center;
+
+    margin:
+        20px auto
+        35px;
+}
+
+.section-label {
+    color: #8b949e;
+
+    font-size: 12px;
+    font-weight: 600;
+
+    letter-spacing: 1.5px;
+}
+
+.endpoint {
+    margin-top: 5px;
+
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+
+    font-size: 36px;
+    font-weight: 600;
+
+    letter-spacing: 1px;
+}
+
+.constant {
+    margin-top: 5px;
+
+    color: #3fb950;
+
+    font-size: 14px;
+    font-weight: 700;
+
+    letter-spacing: 0.5px;
+}
+
+
+/* ---------------------------------------------------------
+   Architecture
+   --------------------------------------------------------- */
+
+.architecture {
+    width: 100%;
+
+    margin: auto;
+}
+
+
+/* ---------------------------------------------------------
+   Generic box
+   --------------------------------------------------------- */
+
+.box {
+    background: #161b22;
+
+    border:
+        2px solid
+        #30363d;
+
+    border-radius: 14px;
+
+    box-shadow:
+        0 8px 30px
+        rgba(0, 0, 0, 0.25);
+
+    text-align: center;
+
+    transition:
+        border-color 0.35s ease,
+        box-shadow 0.35s ease,
+        opacity 0.35s ease,
+        transform 0.35s ease;
+}
+
+.box h2 {
+    margin:
+        0 0 17px;
+
+    font-size: 24px;
+}
+
+
+/* ---------------------------------------------------------
+   Gateway
+   --------------------------------------------------------- */
+
+.gateway {
+    width: 375px;
+
+    margin: auto;
+
+    padding: 28px;
+}
+
+.gateway.up {
+    border-color: #3fb950;
+
+    box-shadow:
+        0 0 22px
+        rgba(63, 185, 80, 0.12);
+}
+
+.gateway.down {
+    border-color: #f85149;
+
+    box-shadow:
+        0 0 22px
+        rgba(248, 81, 73, 0.12);
+}
+
+.gateway.unknown {
+    border-color: #8b949e;
+}
+
+.route {
+    margin-top: 18px;
+
+    color: #8b949e;
+
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+
+    font-size: 14px;
+}
+
+.route strong {
+    color: #e6edf3;
+
+    margin-left: 5px;
+}
+
+
+/* ---------------------------------------------------------
+   Status
+   --------------------------------------------------------- */
+
+.status {
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+
+    gap: 8px;
+
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.status-dot {
+    display: inline-block;
+
+    width: 10px;
+    height: 10px;
+
+    border-radius: 50%;
+
+    background: #8b949e;
+
+    box-shadow:
+        0 0 8px
+        rgba(139, 148, 158, 0.5);
+}
+
+.status.online {
+    color: #3fb950;
+}
+
+.status.online .status-dot {
+    background: #3fb950;
+
+    box-shadow:
+        0 0 10px
+        rgba(63, 185, 80, 0.8);
+}
+
+.status.down {
+    color: #f85149;
+}
+
+.status.down .status-dot {
+    background: #f85149;
+
+    box-shadow:
+        0 0 10px
+        rgba(248, 81, 73, 0.8);
+}
+
+.status.unknown {
+    color: #8b949e;
+}
+
+
+/* ---------------------------------------------------------
+   Gateway route visualization
+   --------------------------------------------------------- */
+
+.gateway-connection {
+    position: relative;
+
+    width: 75%;
+
+    height: 75px;
+
+    margin: auto;
+}
+
+.vertical-line {
+    position: absolute;
+
+    left: 50%;
+    top: 0;
+
+    width: 2px;
+    height: 35px;
+
+    background: #30363d;
+
+    transform: translateX(-50%);
+}
+
+.horizontal-line {
+    position: absolute;
+
+    left: 17%;
+    right: 17%;
+    top: 34px;
+
+    height: 2px;
+
+    background: #30363d;
+}
+
+.route-branch {
+    position: absolute;
+
+    top: 34px;
+
+    width: 2px;
+    height: 41px;
+
+    background: #30363d;
+
+    transition:
+        background 0.4s ease,
+        box-shadow 0.4s ease;
+}
+
+.route-branch.left {
+    left: 17%;
+}
+
+.route-branch.right {
+    right: 17%;
+}
+
+.route-branch.active {
+    background: #58a6ff;
+
+    box-shadow:
+        0 0 10px
+        rgba(88, 166, 255, 0.8);
+}
+
+
+/* ---------------------------------------------------------
+   Kafka clusters
+   --------------------------------------------------------- */
+
+.clusters {
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+
+    gap: 35px;
+}
+
+.cluster {
+    width: 275px;
+
+    min-height: 175px;
+
+    padding: 35px 25px;
+
+    display: flex;
+
+    flex-direction: column;
+    justify-content: center;
+}
+
+.cluster.up {
+    border-color: #3fb950;
+
+    box-shadow:
+        0 0 22px
+        rgba(63, 185, 80, 0.12);
+}
+
+.cluster.down {
+    border-color: #f85149;
+
+    box-shadow:
+        0 0 22px
+        rgba(248, 81, 73, 0.12);
+
+    opacity: 0.72;
+}
+
+.cluster.unknown {
+    border-color: #8b949e;
+}
+
+.role {
+    color: #8b949e;
+
+    margin:
+        -7px 0
+        18px;
+
+    font-size: 16px;
+}
+
+
+/* ---------------------------------------------------------
+   Cluster Linking
+   --------------------------------------------------------- */
+
+.link {
+    width: 260px;
+
+    text-align: center;
+}
+
+.link-line {
+    display: flex;
+
+    align-items: center;
+
+    width: 100%;
+
+    margin-bottom: 18px;
+}
+
+.replication-line {
+    height: 3px;
+
+    background: #3fb950;
+
+    flex: 1;
+
+    box-shadow:
+        0 0 8px
+        rgba(63, 185, 80, 0.4);
+}
+
+.arrow-head {
+    width: 0;
+    height: 0;
+
+    border-top:
+        8px solid transparent;
+
+    border-bottom:
+        8px solid transparent;
+
+    border-left:
+        14px solid #3fb950;
+}
+
+.link-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.mirror-state {
+    margin-top: 5px;
+
+    color: #8b949e;
+
+    font-size: 14px;
+}
+
+.mirror-state.active {
+    color: #3fb950;
+}
+
+.mirror-state.inactive {
+    color: #f85149;
+}
+
+
+/* ---------------------------------------------------------
+   Summary
+   --------------------------------------------------------- */
+
+.dr-summary {
+    display: flex;
+
+    justify-content: center;
+
+    gap: 70px;
+
+    margin:
+        55px auto
+        20px;
+
+    padding: 20px;
+
+    border-top:
+        1px solid #21262d;
+}
+
+.summary-item {
+    display: flex;
+
+    flex-direction: column;
+
+    text-align: center;
+
+    gap: 6px;
+}
+
+.summary-label {
+    color: #8b949e;
+
+    font-size: 12px;
+
+    text-transform: uppercase;
+
+    letter-spacing: 1px;
+}
+
+.summary-value {
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.success-text {
+    color: #3fb950;
+}
+
+
+/* ---------------------------------------------------------
+   Footer
+   --------------------------------------------------------- */
+
+footer {
+    padding:
+        20px
+        20px
+        30px;
+
+    text-align: center;
+
+    color: #484f58;
+
+    font-size: 12px;
+}
+
+
+/* ---------------------------------------------------------
+   Responsive layout
+   --------------------------------------------------------- */
+
+@media (
+    max-width: 850px
+) {
+
+    .gateway {
+        width: 90%;
+    }
+
+    .gateway-connection {
+        display: none;
+    }
+
+    .clusters {
+        margin-top: 40px;
+
+        flex-direction: column;
+    }
+
+    .cluster {
+        width: 90%;
+    }
+
+    .link {
+        width: 60%;
+    }
+
+    .link-line {
+        transform:
+            rotate(90deg);
+
+        margin:
+            35px auto;
+    }
+
+    .dr-summary {
+        flex-direction: column;
+
+        gap: 25px;
+    }
+}
