@@ -252,19 +252,15 @@ flowchart LR
 
 ### Recover
 
-To avoid missing consumming messages the consumer should be stopped before reverse back of cluster linking.
+The producer and consumer may remain running during failback. Consumer commits on Kafka 2 can advance while Kafka 1 catches up; the script reports offset snapshots and allows recovery without exact offset equality. Reconnecting consumers may replay records already consumed on Kafka 2.
 
 ```bash
 sh ./recover-primary-and-failback.sh
 ```
 
-After we can restart the consumer:
+The Gateway is recreated during cutover, so clients briefly disconnect and must reconnect through the same bootstrap address. If Kafka 1 has no committed group offset, the demo consumer's `auto.offset.reset=earliest` policy replays retained records.
 
-```bash
-sh ./consumer.sh
-```
-
-(There is still a chance of duplicates corresponding to uncommited offset.)
+Topic synchronization and mirror state checks still apply. If Cluster Linking cannot finish reversal, the script aborts before switching the Gateway; accepting consumer duplicates does not bypass broker transition errors.
 
 And we are back to original topology:
 

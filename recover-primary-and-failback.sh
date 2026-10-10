@@ -9,22 +9,17 @@ set -euo pipefail
 # EXPECTED STARTING STATE
 #
 #   Producer          RUNNING
-#   Consumer          STOPPED
+#   Consumer          MAY BE RUNNING
 #   Gateway           -> Kafka 2
 #   Kafka 2           SOURCE / WRITABLE
 #   Kafka 1           DOWN / RECOVERING
 #
 # IMPORTANT:
 #
-#   Stop the consumer BEFORE running this script.
-#
-#   Because the consumer is stopped, its committed offset on Kafka 2 is
-#   stable. The script captures that exact offset and refuses to reverse
-#   Cluster Linking until Kafka 1 has received the same offset.
-#
-#   Producer may remain running.
-#
-#   After this script completes, restart the consumer.
+#   Producer and consumer may remain running.
+#   Consumer offsets are replicated asynchronously; failback may replay records
+#   already consumed on Kafka 2. Offset changes do not block recovery.
+#   Topic synchronization and mirror state checks remain required.
 # =============================================================================
 
 
@@ -63,10 +58,6 @@ GATEWAY_SERVICE="${GATEWAY_SERVICE:-gateway}"
 POLL_SECONDS="${POLL_SECONDS:-1}"
 
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-180}"
-
-# Require the synchronized offset to be visible for several samples before
-# allowing the reversal.
-OFFSET_STABLE_SAMPLES="${OFFSET_STABLE_SAMPLES:-3}"
 
 
 # -----------------------------------------------------------------------------
@@ -312,92 +303,6 @@ wait_for_mirror_zero_lag() {
 }
 
 
-# -----------------------------------------------------------------------------
-# Wait until Kafka 1 has EXACTLY the captured Kafka 2 committed offset.
-#
-# Kafka 2 target is static because consumer must be stopped.
-#
-# Require several consecutive samples to make the synchronization barrier
-# explicit.
-# -----------------------------------------------------------------------------
-
-wait_for_exact_recovery_offset() {
-
-    local target="$1"
-
-    local elapsed=0
-    local stable=0
-
-    local kafka1_offset="unknown"
-    local kafka2_offset="unknown"
-
-    while [ "$elapsed" -lt "$MAX_WAIT_SECONDS" ]; do
-
-        kafka2_offset="$(
-            get_group_offset \
-                "$KAFKA2_CONTAINER" \
-                "$KAFKA2_BOOTSTRAP"
-        )"
-
-        kafka1_offset="$(
-            get_group_offset \
-                "$KAFKA1_CONTAINER" \
-                "$KAFKA1_BOOTSTRAP"
-        )"
-
-        # Kafka 2 should NOT move because the consumer is stopped.
-        if [ "$kafka2_offset" != "unknown" ] &&
-           [ "$kafka2_offset" != "$target" ]
-        then
-
-            printf '\n\n'
-
-            failure "Kafka 2 committed offset changed during recovery."
-
-            printf '\n'
-            printf 'Captured offset : %s\n' "$target"
-            printf 'Current offset  : %s\n' "$kafka2_offset"
-
-            printf '\n'
-
-            printf 'The consumer may still be running.\n'
-            printf 'Recovery will NOT continue.\n'
-
-            return 1
-        fi
-
-        if [ "$kafka1_offset" = "$target" ]; then
-            stable=$((stable + 1))
-        else
-            stable=0
-        fi
-
-        printf '\r  Kafka 2 target: %-8s Kafka 1: %-8s Stable: %s/%s' \
-            "$target" \
-            "$kafka1_offset" \
-            "$stable" \
-            "$OFFSET_STABLE_SAMPLES"
-
-        if [ "$stable" -ge "$OFFSET_STABLE_SAMPLES" ]; then
-
-            printf '\n'
-
-            KAFKA1_RECOVERED_OFFSET="$kafka1_offset"
-
-            return 0
-        fi
-
-        sleep "$POLL_SECONDS"
-
-        elapsed=$((elapsed + POLL_SECONDS))
-    done
-
-    printf '\n'
-
-    return 1
-}
-
-
 # =============================================================================
 # Header
 # =============================================================================
@@ -422,7 +327,7 @@ printf '\n'
 printf 'Expected current state:\n\n'
 
 printf '  Producer [RUNNING]\n'
-printf '  Consumer [STOPPED]\n'
+printf '  Consumer [MAY BE RUNNING]\n'
 printf '           |\n'
 printf '           | localhost:19092\n'
 printf '           v\n'
@@ -442,12 +347,12 @@ printf '\n'
 printf 'Recovery objective:\n\n'
 
 printf '  Producer             KEEP RUNNING\n'
-printf '  Consumer             MUST BE STOPPED\n'
+printf '  Consumer             MAY KEEP RUNNING\n'
 printf '  Bootstrap address    NEVER CHANGES\n'
 printf '  Topic data           FULLY SYNCHRONIZED\n'
-printf '  Consumer offset      EXACTLY SYNCHRONIZED\n'
-printf '  Duplicates           MINIMIZED\n'
-printf '  Gaps                 AVOIDED\n'
+printf '  Consumer offset      ASYNCHRONOUSLY REPLICATED\n'
+printf '  Duplicates           ACCEPTED\n'
+printf '  Reversal             WAIT FOR MIRROR READY\n'
 
 printf '\n'
 
@@ -457,7 +362,7 @@ printf 'Recovery sequence:\n\n'
 printf '  1. Recover Kafka 1\n'
 printf '  2. Restore Kafka 1 from Kafka 2\n'
 printf '  3. Synchronize topic data\n'
-printf '  4. Synchronize exact final consumer offset\n'
+printf '  4. Observe consumer recovery position\n'
 printf '  5. Reverse Cluster Linking\n'
 printf '  6. Switch CPC Gateway to Kafka 1\n'
 
@@ -509,7 +414,7 @@ success "Kafka 1 is online."
 printf '\n'
 
 printf 'Producer traffic remains on Kafka 2.\n'
-printf 'Consumer must remain STOPPED.\n'
+printf 'Consumer may remain running.\n'
 
 
 # =============================================================================
@@ -585,7 +490,7 @@ step "3/6" "SYNCHRONIZING TOPIC DATA"
 
 
 printf 'Producer continues running on Kafka 2.\n'
-printf 'Consumer remains stopped.\n\n'
+printf 'Consumer may remain running.\n\n'
 
 printf '  Kafka 2 [SOURCE]'
 printf '  --------------------->  '
@@ -610,139 +515,30 @@ success "Kafka 1 topic data is synchronized."
 
 # =============================================================================
 # 4/6
-# Synchronize exact final consumer offset
+# Observe consumer offsets without requiring a static source offset.
 # =============================================================================
 
-step "4/6" "SYNCHRONIZING FINAL CONSUMER OFFSET"
+step "4/6" "CHECKING CONSUMER RECOVERY POSITION"
 
+printf 'Consumer group: %s\n\n' "$GROUP"
+printf 'The consumer may remain running and committing on Kafka 2.\n'
+printf 'Offsets below are snapshots, not a final handoff position.\n\n'
 
-printf 'Consumer group:\n\n'
-
-printf '  %s\n\n' "$GROUP"
-
-
-printf 'The consumer MUST already be stopped.\n'
-printf 'Therefore Kafka 2 committed offset must now remain static.\n\n'
-
-
-printf 'Capturing final committed offset from Kafka 2...\n\n'
-
-
-KAFKA2_FINAL_OFFSET="$(
-    get_group_offset \
-        "$KAFKA2_CONTAINER" \
-        "$KAFKA2_BOOTSTRAP"
+KAFKA2_CAPTURED_OFFSET="$(
+    get_group_offset "$KAFKA2_CONTAINER" "$KAFKA2_BOOTSTRAP"
+)"
+KAFKA1_OBSERVED_OFFSET="$(
+    get_group_offset "$KAFKA1_CONTAINER" "$KAFKA1_BOOTSTRAP"
 )"
 
+printf '  Kafka 2 committed offset : %s\n' "$KAFKA2_CAPTURED_OFFSET"
+printf '  Kafka 1 mirrored offset  : %s\n\n' "$KAFKA1_OBSERVED_OFFSET"
 
-if [ "$KAFKA2_FINAL_OFFSET" = "unknown" ]; then
+warning "Failback permits consumer replay; exact offset equality is not required."
 
-    failure "Could not determine committed consumer offset on Kafka 2."
-
-    printf '\n'
-
-    printf 'Current Kafka 2 consumer group status:\n\n'
-
-    docker exec "$KAFKA2_CONTAINER" \
-        kafka-consumer-groups \
-        --bootstrap-server "$KAFKA2_BOOTSTRAP" \
-        --describe \
-        --group "$GROUP" \
-        2>&1 || true
-
-    exit 1
+if [ "$KAFKA1_OBSERVED_OFFSET" = "unknown" ]; then
+    warning "Kafka 1 has no visible committed offset; the consumer reset policy will apply if none is available at reconnect."
 fi
-
-
-success "Captured final Kafka 2 consumer offset."
-
-
-printf '\n'
-
-printf 'Final Kafka 2 committed offset: %s\n' \
-    "$KAFKA2_FINAL_OFFSET"
-
-printf '\n'
-
-printf 'Kafka 1 MUST receive exactly this offset before reversal.\n'
-
-printf '\n'
-
-printf 'Waiting for Kafka 1 consumer offset = %s...\n\n' \
-    "$KAFKA2_FINAL_OFFSET"
-
-
-KAFKA1_RECOVERED_OFFSET="unknown"
-
-
-if ! wait_for_exact_recovery_offset \
-    "$KAFKA2_FINAL_OFFSET"
-then
-
-    failure "Kafka 1 did not receive the final Kafka 2 consumer offset."
-
-    printf '\n'
-
-    printf 'Failback aborted.\n'
-    printf 'Gateway remains on Kafka 2.\n'
-
-    printf '\n'
-
-    printf 'Kafka 2 target : %s\n' \
-        "$KAFKA2_FINAL_OFFSET"
-
-    printf 'Kafka 1 offset : %s\n' \
-        "$(
-            get_group_offset \
-                "$KAFKA1_CONTAINER" \
-                "$KAFKA1_BOOTSTRAP"
-        )"
-
-    exit 1
-fi
-
-
-success "Kafka 1 received the exact final consumer offset."
-
-
-printf '\n'
-
-printf 'Consumer recovery position:\n\n'
-
-printf '  Kafka 2 final : %s\n' \
-    "$KAFKA2_FINAL_OFFSET"
-
-printf '  Kafka 1       : %s\n' \
-    "$KAFKA1_RECOVERED_OFFSET"
-
-printf '\n'
-
-printf 'The consumer may now resume from the same committed position\n'
-printf 'after failback.\n'
-
-
-# -----------------------------------------------------------------------------
-# Topic data may have moved while waiting because producer is still running.
-# Re-establish Lag 0.
-# -----------------------------------------------------------------------------
-
-printf '\n'
-
-printf 'Rechecking topic synchronization after offset synchronization...\n\n'
-
-
-if ! wait_for_mirror_zero_lag \
-    "$KAFKA1_CONTAINER" \
-    "$KAFKA1_BOOTSTRAP" \
-    "Kafka 1"
-then
-
-    exit 1
-fi
-
-
-success "Topic data is synchronized immediately before reversal."
-
 
 # =============================================================================
 # 5/6
@@ -751,164 +547,17 @@ success "Topic data is synchronized immediately before reversal."
 
 step "5/6" "REVERSING CLUSTER LINKING"
 
-
-printf 'Performing FINAL consumer offset safety check...\n\n'
-
-
-KAFKA2_CHECK_OFFSET="$(
-    get_group_offset \
-        "$KAFKA2_CONTAINER" \
-        "$KAFKA2_BOOTSTRAP"
-)"
-
-
-KAFKA1_CHECK_OFFSET="$(
-    get_group_offset \
-        "$KAFKA1_CONTAINER" \
-        "$KAFKA1_BOOTSTRAP"
-)"
-
-
-printf '  Captured Kafka 2 : %s\n' \
-    "$KAFKA2_FINAL_OFFSET"
-
-printf '  Current Kafka 2  : %s\n' \
-    "$KAFKA2_CHECK_OFFSET"
-
-printf '  Current Kafka 1  : %s\n' \
-    "$KAFKA1_CHECK_OFFSET"
-
-printf '\n'
-
-
-# Kafka 2 MUST NOT have advanced.
-#
-# If it advanced, the consumer was probably restarted or is still running.
-# Do not reverse.
-
-
-if [ "$KAFKA2_CHECK_OFFSET" != "$KAFKA2_FINAL_OFFSET" ]; then
-
-    failure "Kafka 2 committed offset changed after capture."
-
-    printf '\n'
-
-    printf 'Expected : %s\n' \
-        "$KAFKA2_FINAL_OFFSET"
-
-    printf 'Current  : %s\n' \
-        "$KAFKA2_CHECK_OFFSET"
-
-    printf '\n'
-
-    printf 'The consumer may be running.\n'
-    printf 'Cluster Linking will NOT be reversed.\n'
-    printf 'Gateway remains on Kafka 2.\n'
-
-    exit 1
-fi
-
-
-# Kafka 1 MUST be exactly equal to the captured offset.
-
-
-if [ "$KAFKA1_CHECK_OFFSET" != "$KAFKA2_FINAL_OFFSET" ]; then
-
-    failure "Kafka 1 consumer offset is not exactly synchronized."
-
-    printf '\n'
-
-    printf 'Kafka 2 final : %s\n' \
-        "$KAFKA2_FINAL_OFFSET"
-
-    printf 'Kafka 1       : %s\n' \
-        "$KAFKA1_CHECK_OFFSET"
-
-    printf '\n'
-
-    printf 'Cluster Linking will NOT be reversed.\n'
-    printf 'Gateway remains on Kafka 2.\n'
-
-    exit 1
-fi
-
-
-success "Consumer offsets are exactly synchronized."
-
-
-# -----------------------------------------------------------------------------
-# Final topic synchronization barrier
-# -----------------------------------------------------------------------------
-
-printf '\n'
-
 printf 'Performing FINAL topic synchronization check...\n\n'
-
 
 if ! wait_for_mirror_zero_lag \
     "$KAFKA1_CONTAINER" \
     "$KAFKA1_BOOTSTRAP" \
     "Kafka 1"
 then
-
     exit 1
 fi
-
 
 success "Topic is synchronized immediately before reversal."
-
-
-# -----------------------------------------------------------------------------
-# Check offsets one final time AFTER topic synchronization.
-# -----------------------------------------------------------------------------
-
-printf '\n'
-
-printf 'Rechecking consumer offsets immediately before reverse-and-start...\n\n'
-
-
-KAFKA2_CHECK_OFFSET="$(
-    get_group_offset \
-        "$KAFKA2_CONTAINER" \
-        "$KAFKA2_BOOTSTRAP"
-)"
-
-
-KAFKA1_CHECK_OFFSET="$(
-    get_group_offset \
-        "$KAFKA1_CONTAINER" \
-        "$KAFKA1_BOOTSTRAP"
-)"
-
-
-printf '  Kafka 2 : %s\n' "$KAFKA2_CHECK_OFFSET"
-printf '  Kafka 1 : %s\n' "$KAFKA1_CHECK_OFFSET"
-
-printf '\n'
-
-
-if [ "$KAFKA2_CHECK_OFFSET" != "$KAFKA2_FINAL_OFFSET" ]; then
-
-    failure "Kafka 2 consumer offset changed before reversal."
-
-    printf '\n'
-
-    printf 'Do not restart the consumer until recovery completes.\n'
-
-    exit 1
-fi
-
-
-if [ "$KAFKA1_CHECK_OFFSET" != "$KAFKA2_FINAL_OFFSET" ]; then
-
-    failure "Kafka 1 consumer offset is no longer synchronized."
-
-    exit 1
-fi
-
-
-success "Final offset barrier passed."
-
 
 printf '\n'
 
@@ -1096,7 +745,7 @@ printf '\n'
 printf 'Recreating ONLY the Gateway container...\n'
 
 printf 'Producer remains running.\n'
-printf 'Consumer remains stopped.\n'
+printf 'Consumer may remain running.\n'
 
 printf 'bootstrap.servers remains localhost:19092.\n\n'
 
@@ -1276,7 +925,7 @@ printf '\n'
 printf 'Final topology:\n\n'
 
 printf '  Producer [RUNNING]\n'
-printf '  Consumer [STOPPED]\n'
+printf '  Consumer [MAY BE RUNNING]\n'
 printf '           |\n'
 printf '           | localhost:19092\n'
 printf '           v\n'
@@ -1294,26 +943,21 @@ printf '\n'
 
 
 printf 'Producer                   : still running\n'
-printf 'Consumer                   : STOPPED\n'
+printf 'Consumer                   : may remain running\n'
 printf 'bootstrap.servers          : localhost:19092\n'
 printf 'Primary                    : Kafka 1\n'
 printf 'DR                         : Kafka 2\n'
-printf 'Kafka 2 captured offset    : %s\n' \
-    "$KAFKA2_FINAL_OFFSET"
+printf 'Kafka 2 offset snapshot    : %s\n' \
+    "$KAFKA2_CAPTURED_OFFSET"
 
-printf 'Kafka 1 recovered offset   : %s\n' \
-    "$KAFKA1_CHECK_OFFSET"
+printf 'Kafka 1 current offset     : %s\n' \
+    "$(get_group_offset "$KAFKA1_CONTAINER" "$KAFKA1_BOOTSTRAP")"
 
-
-printf '\n'
-
-printf "${GREEN}${BOLD}You may now restart the consumer.${NC}\n"
 
 printf '\n'
 
-printf 'Expected consumer resume position:\n\n'
-
-printf '  %s\n' "$KAFKA2_FINAL_OFFSET"
+printf 'Running clients can reconnect through the unchanged bootstrap address.\n'
+printf 'Consumer replay is possible after failback.\n'
 
 printf '\n'
 
